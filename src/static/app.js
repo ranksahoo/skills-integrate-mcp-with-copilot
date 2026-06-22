@@ -4,6 +4,80 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // Auth state
+  let teacherCredentials = null; // { username, password } when logged in
+
+  // Auth UI elements
+  const authBtn = document.getElementById("auth-btn");
+  const authStatus = document.getElementById("auth-status");
+  const loginModal = document.getElementById("login-modal");
+  const loginSubmitBtn = document.getElementById("login-submit-btn");
+  const loginCancelBtn = document.getElementById("login-cancel-btn");
+  const loginError = document.getElementById("login-error");
+
+  function updateAuthUI() {
+    if (teacherCredentials) {
+      authStatus.textContent = `Logged in as ${teacherCredentials.username}`;
+      authBtn.textContent = "Logout";
+    } else {
+      authStatus.textContent = "";
+      authBtn.textContent = "Login";
+    }
+    // Show/hide signup form based on auth state
+    signupForm.closest("section").style.display = teacherCredentials ? "" : "none";
+    fetchActivities();
+  }
+
+  authBtn.addEventListener("click", () => {
+    if (teacherCredentials) {
+      teacherCredentials = null;
+      updateAuthUI();
+    } else {
+      loginModal.classList.remove("hidden");
+      document.getElementById("login-username").focus();
+    }
+  });
+
+  loginCancelBtn.addEventListener("click", () => {
+    loginModal.classList.add("hidden");
+    loginError.classList.add("hidden");
+  });
+
+  loginSubmitBtn.addEventListener("click", async () => {
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
+    if (!username || !password) {
+      loginError.textContent = "Please enter username and password.";
+      loginError.classList.remove("hidden");
+      return;
+    }
+
+    // Test credentials against a protected endpoint
+    const testResponse = await fetch(
+      `/activities/${encodeURIComponent("Chess Club")}/signup?email=test@test.com`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Basic " + btoa(`${username}:${password}`),
+        },
+      }
+    );
+
+    // 401 = bad creds, 400 = already signed up (creds valid), 200 = success
+    if (testResponse.status === 401) {
+      loginError.textContent = "Invalid username or password.";
+      loginError.classList.remove("hidden");
+      return;
+    }
+
+    teacherCredentials = { username, password };
+    loginModal.classList.add("hidden");
+    loginError.classList.add("hidden");
+    document.getElementById("login-username").value = "";
+    document.getElementById("login-password").value = "";
+    updateAuthUI();
+  });
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -12,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -21,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const spotsLeft =
           details.max_participants - details.participants.length;
 
-        // Create participants HTML with delete icons instead of bullet points
+        // Show delete buttons only to logged-in teachers
         const participantsHTML =
           details.participants.length > 0
             ? `<div class="participants-section">
@@ -30,7 +105,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${
+                        teacherCredentials
+                          ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button>`
+                          : ""
+                      }</li>`
                   )
                   .join("")}
               </ul>
@@ -80,6 +159,9 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: teacherCredentials
+            ? { Authorization: "Basic " + btoa(`${teacherCredentials.username}:${teacherCredentials.password}`) }
+            : {},
         }
       );
 
@@ -124,6 +206,9 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: teacherCredentials
+            ? { Authorization: "Basic " + btoa(`${teacherCredentials.username}:${teacherCredentials.password}`) }
+            : {},
         }
       );
 
@@ -156,5 +241,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize app
-  fetchActivities();
+  updateAuthUI();
 });
