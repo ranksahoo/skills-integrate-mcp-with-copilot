@@ -26,6 +26,9 @@ jobs:
     name: Post next step content
     needs: [find_exercise]
     runs-on: ubuntu-latest
+    if: |
+      !github.event.repository.is_template &&
+      github.actor != 'github-actions[bot]'
     env:
       ISSUE_REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: ${{ needs.find_exercise.outputs.issue-number }}
